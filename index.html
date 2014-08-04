@@ -1,0 +1,426 @@
+<html lang="en">
+  <head>
+    <title>Triangle Expressway Toll Calculator</title>
+    <meta name="author" content="Dominique Bischof, @dominastrum">
+    <meta id="testViewport" name="viewport" content="width=device-width">
+    <meta charset="utf-8">
+    <script>
+    if (screen.width < 760) {
+      var mvp = document.getElementById('testViewport');
+      mvp.setAttribute('content','width=415');
+    }
+    </script>
+    <style>
+    body {
+      font-family: sans-serif;
+      background-color: #949494;
+      margin: 0px;
+    }
+    #map {
+      width: 375.815px;
+      height: 802.5px;
+      float: left;
+      margin-left: 20px;
+      margin-bottom: 20px;
+    }
+
+    #info {
+      border: 1px solid #ccc;
+      margin: 20px;
+      padding: 10px;
+      overflow: auto;
+    }
+    #info span {
+      display: block;
+      min-width: 3.5em;
+      float: left;
+    }
+    #info div span:first-child {
+      font-weight: bold;
+    }
+    #exit, #rates {
+      clear: left;
+    }
+    #rates {
+      padding-top: 20px;
+    }
+    table {
+      text-align: left;
+    }
+    th, tr td:first-child {
+      font-weight: bold;
+    }
+    th:nth-child(2), td:nth-child(2) {
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    #rates p {
+      font-size: small;
+    }
+    #rates div:last-child {
+      text-align: center;
+    }
+
+    .details {
+      margin: 20px;
+    }
+
+    section {
+      background-color: #efefe9;
+      overflow: auto;
+      max-width: 415px;
+      margin: 0 auto;
+    }
+    h1 {
+      background-color: #3a3a3a;
+      color: white;
+      margin: 0;
+      padding: 30px 20px;
+    }
+
+    footer {
+      clear: both;
+      font-size: small;
+      padding: 20px 10px;
+      background-color: #3a3a3a;
+      color: #949494;
+    }
+
+    @media (min-width: 760px) {
+      section {
+        max-width: 760px;
+      }
+
+      #info {
+        float: right;
+        min-width: 300px;
+      }
+
+      #map {
+        margin-top: 20px;
+      }
+
+      .details {
+        margin: 50px 20px;
+        width: 320px;
+        float: right;
+      }
+    }
+    </style>
+  </head>
+  <body>
+
+    <section>
+      <h1>Triangle Expressway Toll Calculator</h1>
+
+      <div id="info">
+        <div>
+          <span>From:</span> <span id="entry-name"></span>
+        </div>
+        <div id="exit">
+          <span>To:</span> <span id="exit-name"></span>
+        </div>
+
+        <div id="rates">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>NC Quick Pass*</th>
+                <th>Bill by Mail</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>2 Axels</td>
+                <td id="ncqp2"></td>
+                <td id="bbm2"></td>
+              </tr>
+              <tr>
+                <td>3 Axels</td>
+                <td id="ncqp3"></td>
+                <td id="bbm3"></td>
+              </tr>
+              <tr>
+                <td>4+ Axels</td>
+                <td id="ncqp4"></td>
+                <td id="bbm4"></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p>* Including E-ZPass &amp; Sun Pass</p>
+
+          <div>
+            <button>Try another routing</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="map"></div>
+
+      <div class="details">
+        Complete and official details on the tolls and their rates can be found on the <a href="https://www.myncquickpass.com">NC Quick Pass</a> website.
+      </div>
+
+      <footer>
+        This site is not affiliated with the Triangle Expressway, the North Carolina Turnpike Authority, and NC Quick Pass. Toll rates are current as of January 1, 2014. Not resposible for errors in rates.
+      </footer>
+    </section>
+
+    <script src="snap.svg-min.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+    <script>window.jQuery || document.write('<script src="jquery-2.1.0.min.js"></'+'script>')</script>
+    <script>
+    "use strict";
+
+    var interchanges = [];
+    var enterInterchange, exitInterchange;
+    var ncQuickPassRates, billByMailRates;
+
+    $("document").ready(function () {
+
+      reset();
+
+      var map = Snap("#map");
+      Snap.load("expressway_toll_guide_2014.svg", function (f) {
+
+        var inters = f.select("g[id='interchanges']").selectAll("path");
+
+        for (var i=0; i < inters.length; i++) {
+          var interchange = inters[i];
+
+          interchanges[getInterchangeIdNumber(interchange)] = interchange;
+
+          interchange.attr({cursor: "pointer"});
+          interchange.hover(function () {
+            // On hover over
+            if (!enterInterchange) {
+              this.attr({fill: "#00ff00"});
+            }
+            else if (!exitInterchange && this != enterInterchange) {
+             this.attr({fill: "#ff0000"}); 
+            }
+          }, function () {
+            // On hover out
+            if (this != enterInterchange && this != exitInterchange) {
+              this.attr({fill: "#ffffff"});
+            }
+          });
+
+          interchange.node.onclick = function() {
+            interchangeClicked(this.id);
+          }
+        }
+
+        //f.select('path[id="interchange1"').attr({display: "none"});
+
+        map.append(f);
+      });
+
+      $("button").click(function () {
+        reset()
+      });
+
+    });
+
+    function reset() {
+      if (exitInterchange) {
+        enterInterchange.attr({fill: "#ffffff"});
+        exitInterchange.attr({fill: "#ffffff"});
+      }
+      enterInterchange = exitInterchange = null;
+
+      $("#entry-name").html("Select entry point on map");
+      $("#exit-name").html("Select exit point on map");
+
+      $("#exit").hide();
+      $("#rates").hide();
+    }
+
+    function getInterchangeIdNumber(interchange) {
+      var id = interchange.attr("id");
+      return parseInt(id.substr(11)); // Strip the word "interchange" from the front of the id
+    }
+
+    function interchangeClicked(id) {
+      var interchange;
+
+      id = parseInt(id.slice(-1));
+      interchange = interchanges[id];
+
+      if (null == enterInterchange) {
+        enterInterchange = interchange;
+        $("#entry-name").html(interchange.attr("name"));
+        $("#exit").show();
+      }
+      else if (null == exitInterchange) {
+        if (enterInterchange == interchange) {
+          return;
+        }
+
+        exitInterchange = interchange;
+        routeBetweenInterchanges(enterInterchange, exitInterchange);
+
+        $("#exit-name").html(exitInterchange.attr("name"));
+
+        $("#ncqp2").html("$"+ncQuickPassRates[0].toFixed(2));
+        $("#ncqp3").html("$"+ncQuickPassRates[1].toFixed(2));
+        $("#ncqp4").html("$"+ncQuickPassRates[2].toFixed(2));
+
+        $("#bbm2").html("$"+billByMailRates[0].toFixed(2));
+        $("#bbm3").html("$"+billByMailRates[1].toFixed(2));
+        $("#bbm4").html("$"+billByMailRates[2].toFixed(2));
+
+        $("#rates").show();
+
+        if ($("#info").offset().top < $(window).scrollTop()) {
+          $('html, body').animate({
+            scrollTop: $("#info").offset().top
+          }, 200);
+        }
+      }
+
+    }
+
+    function routeBetweenInterchanges(enter, exit) {
+      var enterId = getInterchangeIdNumber(enter);
+      var exitId = getInterchangeIdNumber(exit);
+      var thisId, nextId, leg, rates;
+      
+      ncQuickPassRates = [0, 0, 0];
+      billByMailRates = [0, 0, 0];
+
+      thisId = enterId;
+        
+      while (nextId != exitId) {
+
+        if (enterId < exitId) {
+          // Heading south
+          nextId = thisId+1;
+          if (1 == thisId && 2 != exitId) {
+            nextId = 3;
+          }
+        }
+        else {
+          // Heading north
+          nextId = thisId-1;
+          if (3 == thisId && 2 != exitId) {
+            nextId = 1;
+          }
+        }
+
+        leg = interchangeRoutings[thisId];
+        if (thisId == enterId && "enter" in leg[nextId]) { // entering / first leg
+          addTollRates(leg[nextId]["enter"]);
+        }
+        else if (nextId == exitId && "exit" in leg[nextId]) { // exiting / last leg
+          addTollRates(leg[nextId]["exit"]);
+        }
+        else if ("driveBy" in leg[nextId]) { // driving by / intermediary leg
+          addTollRates(leg[nextId]["driveBy"]);
+        }
+
+        thisId = nextId;
+      }
+    }
+
+    function addTollRates(rates) {
+      ncQuickPassRates[0] += rates["ncQuickPass"][0];
+      ncQuickPassRates[1] += rates["ncQuickPass"][1];
+      ncQuickPassRates[2] += rates["ncQuickPass"][2];
+
+      billByMailRates[0] += rates["billByMail"][0];
+      billByMailRates[1] += rates["billByMail"][1];
+      billByMailRates[2] += rates["billByMail"][2];
+    }
+
+    var tollRates = [
+      {
+        name: "Ramp at Hopson Rd/Davis Dr",
+        ncQuickPass: [0.31, 0.62, 1.24],  // 2 axels, 3 axels, 4+ axels
+        billByMail: [0.47, 0.94, 1.88]
+      },
+      {
+        name: "North ramps at toll NC 147 and toll NC 540",
+        ncQuickPass: [0.69, 1.38, 2.76],
+        billByMail: [1.05, 2.10, 4.20]
+      },
+      {
+        name: "South ramps at toll NC 147 and toll NC 540",
+        ncQuickPass: [0.86, 1.72, 3.44],
+        billByMail: [1.31, 2.62, 5.24]
+      },
+      {
+        name: "Toll NC 540 mainline at toll NC 147",
+        ncQuickPass: [0.55, 1.10, 2.20],
+        billByMail: [0.84, 1.68, 3.36]
+      },
+      {
+        name: "Toll NC 540 mainline north of Green Level West Rd.",
+        ncQuickPass: [0.69, 1.38, 2.76],
+        billByMail: [1.05, 2.10, 4.20]
+      },
+      {
+        name: "Toll NC 540 ramp at US 64",
+        ncQuickPass: [0.38, 0.76, 1.52],
+        billByMail: [0.58, 1.16, 2.32]
+      },
+      {
+        name: "Toll NC 540 mainline north of Old US 1",
+        ncQuickPass: [0.86, 1.72, 3.44],
+        billByMail: [1.32, 1.16, 2.32]
+      },
+      {
+        name: "Toll NC 540 ramp at Old US 1",
+        ncQuickPass: [0.22, 0.44, 0.88],
+        billByMail: [0.33, 0.66, 1.32]
+      },
+      {
+        name: "Toll NC 540 mainline north of NC 55",
+        ncQuickPass: [0.36, 0.72, 1.44],
+        billByMail: [0.55, 1.10, 2.20]
+      }
+    ];
+
+    var interchangeRoutings = {
+      0: {
+        1: {exit: tollRates[0]}
+      },
+      1: {
+        0: {exit: tollRates[0]},
+        2: {exit: tollRates[1]},
+        3: {driveBy: tollRates[2]}
+      },
+      2: {
+        1: {driveBy: tollRates[1]},
+        3: {driveBy: tollRates[3]}
+      },
+      3: {
+        1: {driveBy: tollRates[2]},
+        2: {exit: tollRates[3]},
+        4: {driveBy: tollRates[4]}
+      },
+      4: {
+        3: {driveBy: tollRates[4]},
+        5: {exit: tollRates[5]}
+      },
+      5: {
+        4: {enter: tollRates[5]},
+        6: {driveBy: tollRates[6]}
+      },
+      6: {
+        5: {driveBy: tollRates[6]},
+        7: {enter: tollRates[7]}
+      },
+      7: {
+        6: {exit: tollRates[7]},
+        8: {exit: tollRates[8]}
+      },
+      8: {
+        7: {enter: tollRates[8]}
+      }
+    };
+    </script>
+  </body>
+</html>
