@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <title>Triangle Expressway Toll Calculator</title>
@@ -47,6 +48,9 @@
     table {
       text-align: left;
     }
+    th {
+      vertical-align: bottom;
+    }
     th, tr td:first-child {
       font-weight: bold;
     }
@@ -54,11 +58,9 @@
       padding-left: 10px;
       padding-right: 10px;
     }
-    #rates p {
-      font-size: small;
-    }
     #rates div:last-child {
       text-align: center;
+      margin-top: 20px;
     }
 
     .details {
@@ -126,7 +128,7 @@
             <thead>
               <tr>
                 <th></th>
-                <th>NC Quick Pass*</th>
+                <th>NC Quick Pass<br>or E-ZPass<br>or Sun Pass</th>
                 <th>Bill by Mail</th>
               </tr>
             </thead>
@@ -148,8 +150,6 @@
               </tr>
             </tbody>
           </table>
-
-          <p>* Including E-ZPass &amp; Sun Pass</p>
 
           <div>
             <button>Try another routing</button>
